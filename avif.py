@@ -1,6 +1,6 @@
 import tempfile
 import subprocess
-import PIL.Image
+from . import YUV4MPEG2
 
 workers_count = 1
 
@@ -16,6 +16,7 @@ def is_avif(file):
 def decode(file):
     if not is_avif(file):
         raise Exception
-    tmp_file = tempfile.NamedTemporaryFile(mode='rb', delete=True, suffix='.png')
+    tmp_file = tempfile.NamedTemporaryFile(mode='rb', delete=True, suffix='.y4m')
     subprocess.call(['avifdec', '-j', str(workers_count), str(file), tmp_file.name])
-    return PIL.Image.open(tmp_file)
+    decoder = YUV4MPEG2.YUV4MPEG2Decoder(tmp_file.name)
+    return decoder.decode()

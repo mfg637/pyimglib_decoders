@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import PIL.Image
-from . import jpeg, ffmpeg_webm_video, ffmpeg_mpeg4_video, webp, svg, apng, avif
+from . import jpeg, ffmpeg_webm_video, ffmpeg_mpeg4_video, webp, svg, apng, avif, YUV4MPEG2
 
 
 def open_image(file_path, required_size=None):
@@ -13,6 +13,9 @@ def open_image(file_path, required_size=None):
         return img
     elif avif.is_avif(file_path):
         return avif.decode(file_path)
+    elif YUV4MPEG2.is_Y4M(file_path):
+        decoder = YUV4MPEG2.YUV4MPEG2Decoder(file_path)
+        return decoder.decode()
     else:
         pil_image = None
         try:
