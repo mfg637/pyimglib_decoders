@@ -11,6 +11,15 @@ MAX_HEADER_LINE_SIZE = 2048
 LIMITED_COLOR_RANGE = "XCOLORRANGE=LIMITED"
 
 
+class LIMITED_RANGE_CORRENTION_MODES(enum.Enum):
+    NONE = enum.auto()
+    CLIPPING = enum.auto()
+    EXPAND = enum.auto()
+
+
+limited_range_correction = LIMITED_RANGE_CORRENTION_MODES.CLIPPING
+
+
 class SUPPORTED_COLOR_SPACES(enum.Enum):
     NONE = 0
     YUV420 = 420
@@ -75,8 +84,39 @@ class YUV4MPEG2Decoder(CustomDecoder.CustomDecoder):
     @staticmethod
     def expand_limited_color_range(plane):
         result_plane = bytearray(len(plane))
-        for i in range(len(plane)):
-            result_plane[i] = int((plane[i] - 16) / 219 * 255)
+        MIN_INPUT_VALUE = 16
+        MAX_INPUT_VALUE = 235
+        DIVIDER = 219
+        if limited_range_correction == LIMITED_RANGE_CORRENTION_MODES.EXPAND:
+            i = 0
+            while i < len(plane):
+                if plane[i] < MIN_INPUT_VALUE:
+                    MIN_INPUT_VALUE = plane[i]
+                    DIVIDER = MAX_INPUT_VALUE - MIN_INPUT_VALUE
+                    i = 0
+                elif plane[i] > MAX_INPUT_VALUE:
+                    MAX_INPUT_VALUE = plane[i]
+                    DIVIDER = MAX_INPUT_VALUE - MIN_INPUT_VALUE
+                    i = 0
+                else:
+                    value = (plane[i] - MIN_INPUT_VALUE) / DIVIDER * 255
+                    result_plane[i] = int(value)
+                    i += 1
+        else:
+            for i in range(len(plane)):
+                value = (plane[i] - MIN_INPUT_VALUE) / DIVIDER * 255
+                if value < 0:
+                    if limited_range_correction == LIMITED_RANGE_CORRENTION_MODES.CLIPPING:
+                        value = 0
+                    else:
+                        raise ValueError(plane[i])
+                elif value > 255:
+                    if limited_range_correction == LIMITED_RANGE_CORRENTION_MODES.CLIPPING:
+                        value = 255
+                    else:
+                        raise ValueError(plane[i])
+                result_plane[i] = int(value)
+
         return bytes(result_plane)
 
     def decode(self):
