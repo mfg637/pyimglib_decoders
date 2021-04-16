@@ -137,14 +137,15 @@ class YUV4MPEG2Decoder(CustomDecoder.CustomDecoder):
             if self._profile == SUPPORTED_COLOR_SPACES.YUV444 or self._profile == SUPPORTED_COLOR_SPACES.YUVA4444:
                 Cb_plane = self._file.read(plane_size)
                 Cr_plane = self._file.read(plane_size)
-            elif self._profile == SUPPORTED_COLOR_SPACES.YUV420:
-                Cb_plane = self._file.read(plane_size//4)
-                Cr_plane = self._file.read(plane_size//4)
-                color_size = (self._size[0]//2, self._size[1]//2)
-            elif self._profile == SUPPORTED_COLOR_SPACES.YUV422:
-                Cb_plane = self._file.read(plane_size//2)
-                Cr_plane = self._file.read(plane_size//2)
-                color_size = (self._size[0]//2, self._size[1])
+            else:
+                color_size = None
+                if self._profile == SUPPORTED_COLOR_SPACES.YUV420:
+                    color_size = (self._size[0]//2, self._size[1]//2)
+                elif self._profile == SUPPORTED_COLOR_SPACES.YUV422:
+                    color_size = (self._size[0] // 2, self._size[1])
+                current_plane_size = color_size[0] * color_size[1]
+                Cb_plane = self._file.read(current_plane_size)
+                Cr_plane = self._file.read(current_plane_size)
 
             if self._color_space == COLOOR_SPACE.LIMITED:
                 Cb_plane = self.expand_limited_color_range(Cb_plane)
