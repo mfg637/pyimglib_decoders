@@ -4,6 +4,9 @@
 import struct
 import subprocess
 import threading
+import io
+
+from .YUV4MPEG2 import SUPPORTED_COLOR_SPACES
 
 from . import CustomDecoder
 
@@ -43,6 +46,45 @@ is_arithmetic_SOF = {
 }
 
 
+def read_frame_data(seekable_binary_stream: io.BufferedRandom):
+    seekable_binary_stream.seek(0)
+    header = seekable_binary_stream.read(2)
+    if header != b'\xff\xd8':
+        raise Exception
+    size = None
+    while size is None:
+        marker = seekable_binary_stream.read(2)
+        # fix marker reading position
+        if marker[0] != 255 and marker[1] == 255:
+            seekable_binary_stream.seek(-1, 1)
+            marker = seekable_binary_stream.read(2)
+        if marker == b'\xff\x00':
+            raise ValueError("jpeg marker not found")
+        if marker in START_OF_FRAME_MARKERS:
+            seekable_binary_stream.seek(3, 1)
+            size = struct.unpack('>HH', seekable_binary_stream.read(4))
+            components = seekable_binary_stream.read(1)[0]
+            component_scales = []
+            subsampling = SUPPORTED_COLOR_SPACES.NONE
+            for component in range(components):
+                component_id = seekable_binary_stream.read(1)[0]
+                colorspace_struct = seekable_binary_stream.read(1)[0]
+                h = (colorspace_struct & 0xf0) >> 4
+                v = colorspace_struct & 0x0f
+                component_scales.append((h, v))
+                seekable_binary_stream.seek(1, 1)
+            if component_scales[0] == (2, 2):
+                subsampling = SUPPORTED_COLOR_SPACES.YUV420
+            elif component_scales[0] == (2, 1) or component_scales[0] == (1, 2):
+                subsampling = SUPPORTED_COLOR_SPACES.YUV422
+            else:
+                subsampling = SUPPORTED_COLOR_SPACES.YUV444
+            return (size, subsampling)
+        else:
+            frame_len = struct.unpack('>H', seekable_binary_stream.read(2))[0]
+            seekable_binary_stream.seek(frame_len - 2, 1)
+
+
 def is_JPEG(file_path):
     file = open(file_path, 'rb')
     header = file.read(2)
@@ -62,24 +104,8 @@ class JPEGDecoder(CustomDecoder.CustomDecoder):
         self._process = None
 
     def get_size(self):
-        if self._size is None:
-            while self._size is None:
-                marker = self._file.read(2)
-                # fix marker reading position
-                if marker[0] != 255 and marker[1] == 255:
-                    self._file.seek(-1, 1)
-                    marker = self._file.read(2)
-                if marker == b'\xff\x00':
-                    raise ValueError("jpeg marker not found")
-                if marker in START_OF_FRAME_MARKERS:
-                    self._file.seek(3, 1)
-                    self._size = struct.unpack('>HH', self._file.read(4))
-                else:
-                    frame_len = struct.unpack('>H', self._file.read(2))[0]
-                    self._file.seek(frame_len-2, 1)
-            #self._file.close()
+        self._size = read_frame_data(self._file)[0]
         return self._size
-
 
     def arithmetic_coding(self):
         if self._size is None:
