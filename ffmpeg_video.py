@@ -53,6 +53,7 @@ class Video(ImageFile.ImageFile, metaclass=abc.ABCMeta):
         commandline = ['ffmpeg',
                        '-i', self.filename,
                        '-f', 'image2pipe',
+                       '-map', "0:{}".format(video['index']),
                        '-pix_fmt', 'rgb24',
                        '-an',
                        '-r', str(fps),
