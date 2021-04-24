@@ -2,7 +2,15 @@
 # -*- coding: utf-8 -*-
 
 import PIL.Image
-from . import jpeg, ffmpeg_webm_video, ffmpeg_mpeg4_video, webp, svg, apng, avif, YUV4MPEG2, jpeg_xl
+from . import jpeg,\
+    webp,\
+    svg,\
+    apng,\
+    avif,\
+    YUV4MPEG2,\
+    jpeg_xl,\
+    frames_stream,\
+    video
 
 
 def open_image(file_path, required_size=None):
@@ -18,6 +26,8 @@ def open_image(file_path, required_size=None):
         return decoder.decode()
     elif jpeg_xl.is_JPEG_XL(file_path):
         return jpeg_xl.decode(file_path)
+    elif video.is_video(file_path):
+        return video.open_video(file_path)
     else:
         pil_image = None
         try:
