@@ -10,7 +10,15 @@ def is_avif(file):
     file.seek(4)
     header = file.read(8)
     file.close()
-    return header == b'ftypavif'
+    return header in (b'ftypavif', b'ftypavis')
+
+
+def is_animated_avif(file):
+    file = open(file, 'rb')
+    file.seek(4)
+    header = file.read(8)
+    file.close()
+    return header == b'ftypavis'
 
 
 def decode(file):
@@ -18,5 +26,4 @@ def decode(file):
         raise Exception
     tmp_file = tempfile.NamedTemporaryFile(mode='rb', delete=True, suffix='.y4m')
     subprocess.call(['avifdec', '-j', str(workers_count), str(file), tmp_file.name])
-    decoder = YUV4MPEG2.YUV4MPEG2Decoder(tmp_file.name)
-    return decoder.decode()
+    return YUV4MPEG2.Y4M_FramesStream(tmp_file.name)

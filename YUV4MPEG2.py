@@ -1,4 +1,7 @@
+import PIL.Image
+import os
 from PIL import Image, ImageFile
+from . import frames_stream
 
 from . import CustomDecoder
 
@@ -40,23 +43,24 @@ def is_Y4M(file_path):
     return header == FILE_SIGNATURE
 
 
-class YUV4MPEG2Decoder(CustomDecoder.CustomDecoder):
+class Y4M_FramesStream(frames_stream.FramesStream):
     def __init__(self, file_path):
+        super().__init__(file_path)
         self._file_path = file_path
         self._file = open(file_path, 'rb')
         header = self._file.readline(MAX_HEADER_LINE_SIZE)
         if header[:SIGNATURE_LENGTH] != FILE_SIGNATURE:
             self._file.close()
             raise Exception
-        _width, _height = 0, 0
+        self._width, self._height = 0, 0
         self._profile = SUPPORTED_COLOR_SPACES.NONE
         self._color_space = COLOOR_SPACE.FULL
         header_raw_data = str(header).split(' ')[1:]
         for raw_data in header_raw_data:
             if raw_data[0] == 'W':
-                _width = int(raw_data[1:])
+                self._width = int(raw_data[1:])
             elif raw_data[0] == 'H':
-                _height = int(raw_data[1:])
+                self._height = int(raw_data[1:])
             elif raw_data[0] == 'C':
                 if raw_data[1:] == "444":
                     self._profile = SUPPORTED_COLOR_SPACES.YUV444
@@ -76,10 +80,26 @@ class YUV4MPEG2Decoder(CustomDecoder.CustomDecoder):
                     raise NotImplementedError("Non square pixel format")
             elif LIMITED_COLOR_RANGE == raw_data[:len(LIMITED_COLOR_RANGE)]:
                 self._color_space = COLOOR_SPACE.LIMITED
-        self._size = (_width, _height)
+            elif raw_data[0] == 'F':
+                _f = raw_data[1:].split(':')
+                fps = int(_f[0])/int(_f[1])
+                self._frame_time_ms = int(round(1 / fps * 1000))
+        self._size = (self._width, self._height)
 
-    def get_size(self):
-        return self._size
+        self._plane_size = self._size[0] * self._size[1]
+        self._color_size = self._size
+        if self._profile == SUPPORTED_COLOR_SPACES.YUV420:
+            self._color_size = (self._size[0] // 2, self._size[1] // 2)
+        elif self._profile == SUPPORTED_COLOR_SPACES.YUV422:
+            self._color_size = (self._size[0] // 2, self._size[1])
+
+        frame_size = self._plane_size + self._color_size[0] * self._color_size[1] * 2
+        if self._profile == SUPPORTED_COLOR_SPACES.YUVA4444:
+            frame_size += self._plane_size
+        if os.path.getsize(file_path) > frame_size * 2:
+            self._is_animated = True
+        else:
+            self._is_animated = False
 
     @staticmethod
     def expand_limited_color_range(plane):
@@ -116,34 +136,24 @@ class YUV4MPEG2Decoder(CustomDecoder.CustomDecoder):
                     else:
                         raise ValueError(plane[i])
                 result_plane[i] = int(value)
+            return bytes(result_plane)
 
-        return bytes(result_plane)
-
-    def decode(self):
-        self._alpha_plane = None
+    def next_frame(self) -> PIL.Image.Image:
         if self._profile != SUPPORTED_COLOR_SPACES.NONE:
-            plane_size = self._size[0] * self._size[1]
             frame_flag = self._file.read(6)
             if frame_flag != b"FRAME\n":
-                print("frame flag = {}".format(frame_flag))
-                raise SyntaxError("frame flag = {}".format(frame_flag))
-            Y_plane = self._file.read(plane_size)
+                raise EOFError("frame flag = {}".format(frame_flag))
+            Y_plane = self._file.read(self._plane_size)
             if self._color_space == COLOOR_SPACE.LIMITED:
                 Y_plane = self.expand_limited_color_range(Y_plane)
             Y_channel = Image.frombytes("L", self._size, Y_plane, "raw", "L", 0, 1)
             Cb_plane = b""
             Cr_plane = b""
-            color_size = self._size
             if self._profile == SUPPORTED_COLOR_SPACES.YUV444 or self._profile == SUPPORTED_COLOR_SPACES.YUVA4444:
-                Cb_plane = self._file.read(plane_size)
-                Cr_plane = self._file.read(plane_size)
+                Cb_plane = self._file.read(self._plane_size)
+                Cr_plane = self._file.read(self._plane_size)
             else:
-                color_size = None
-                if self._profile == SUPPORTED_COLOR_SPACES.YUV420:
-                    color_size = (self._size[0]//2, self._size[1]//2)
-                elif self._profile == SUPPORTED_COLOR_SPACES.YUV422:
-                    color_size = (self._size[0] // 2, self._size[1])
-                current_plane_size = color_size[0] * color_size[1]
+                current_plane_size = self._color_size[0] * self._color_size[1]
                 Cb_plane = self._file.read(current_plane_size)
                 Cr_plane = self._file.read(current_plane_size)
 
@@ -151,19 +161,18 @@ class YUV4MPEG2Decoder(CustomDecoder.CustomDecoder):
                 Cb_plane = self.expand_limited_color_range(Cb_plane)
                 Cr_plane = self.expand_limited_color_range(Cr_plane)
 
-            Cb_channel = Image.frombytes("L", color_size, Cb_plane, "raw", "L", 0, 1)
-            Cr_channel = Image.frombytes("L", color_size, Cr_plane, "raw", "L", 0, 1)
+            Cb_channel = Image.frombytes("L", self._color_size, Cb_plane, "raw", "L", 0, 1)
+            Cr_channel = Image.frombytes("L", self._color_size, Cr_plane, "raw", "L", 0, 1)
             if self._profile != SUPPORTED_COLOR_SPACES.YUV444 and self._profile != SUPPORTED_COLOR_SPACES.YUVA4444:
                 Cb_channel = Cb_channel.resize(self._size)
                 Cr_channel = Cr_channel.resize(self._size)
 
             image = Image.merge("YCbCr", (Y_channel, Cb_channel, Cr_channel))
             if self._profile == SUPPORTED_COLOR_SPACES.YUVA4444:
-                alpha_channel = Image.frombytes("L", self._size, self._file.read(plane_size), "raw", "L", 0, 1)
+                alpha_channel = Image.frombytes("L", self._size, self._file.read(self._plane_size), "raw", "L", 0, 1)
                 image = image.convert(mode="RGB")
                 image.putalpha(alpha_channel)
-            self._file.close()
             return image
 
-    def __del__(self):
+    def close(self):
         self._file.close()

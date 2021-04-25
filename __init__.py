@@ -22,8 +22,7 @@ def open_image(file_path, required_size=None):
     elif avif.is_avif(file_path):
         return avif.decode(file_path)
     elif YUV4MPEG2.is_Y4M(file_path):
-        decoder = YUV4MPEG2.YUV4MPEG2Decoder(file_path)
-        return decoder.decode()
+        return YUV4MPEG2.Y4M_FramesStream(file_path)
     elif jpeg_xl.is_JPEG_XL(file_path):
         return jpeg_xl.decode(file_path)
     elif video.is_video(file_path):
