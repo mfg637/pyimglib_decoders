@@ -2,6 +2,7 @@ import PIL.Image
 import os
 from PIL import Image, ImageFile
 from . import frames_stream
+import math
 
 from . import CustomDecoder
 
@@ -154,8 +155,13 @@ class Y4M_FramesStream(frames_stream.FramesStream):
                 Cr_plane = self._file.read(self._plane_size)
             else:
                 current_plane_size = self._color_size[0] * self._color_size[1]
-                Cb_plane = self._file.read(current_plane_size)
-                Cr_plane = self._file.read(current_plane_size)
+                if (self._size[0] & 1) == 1 or (self._size[1] & 1) == 1:
+                    current_plane_size += self._color_size[1]
+                color_planes_buffer = self._file.read(current_plane_size * 2)
+                Cb_plane = color_planes_buffer[:len(color_planes_buffer)//2]
+                Cr_plane = color_planes_buffer[len(color_planes_buffer)//2:]
+                if len(color_planes_buffer) > (self._color_size[0] * self._color_size[1] * 2):
+                    self._color_size = (self._color_size[0] + 1, self._color_size[1])
 
             if self._color_space == COLOOR_SPACE.LIMITED:
                 Cb_plane = self.expand_limited_color_range(Cb_plane)
