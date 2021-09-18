@@ -11,7 +11,8 @@ from . import jpeg,\
     jpeg_xl,\
     frames_stream,\
     video,\
-    srs
+    srs,\
+    ACLMMP
 
 
 def open_image(file_path, required_size=None):

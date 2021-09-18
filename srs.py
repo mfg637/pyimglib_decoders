@@ -1,4 +1,4 @@
-from . import ACLMMP
+from . import ACLMMP, ffmpeg_frames_stream
 from .video import open_video
 import json
 
@@ -16,4 +16,4 @@ def decode(file_path):
     fp.close()
 
     video = streams_metadata[0].get_compatible_files(0)[0]
-    return open_video(video)
+    return ffmpeg_frames_stream.FFmpegFramesStream(video, original_filename=file_path)

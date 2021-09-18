@@ -14,8 +14,9 @@ def fps_calc(raw_str):
 
 
 class FFmpegFramesStream(frames_stream.FramesStream):
-    def __init__(self, file_name):
+    def __init__(self, file_name, original_filename=None):
         super().__init__(file_name)
+        self._original_filename = original_filename
         data = ffmpeg.probe(file_name)
 
         video = None
@@ -76,3 +77,9 @@ class FFmpegFramesStream(frames_stream.FramesStream):
     def close(self):
         self.process.stdout.close()
         self.process.terminate()
+
+    @property
+    def filename(self):
+        if self._original_filename is not None:
+            return self._original_filename
+        return self._file_path
