@@ -6,7 +6,11 @@ SRS_FILE_HEADER = "{\"ftype\":\"CLSRS\""
 
 def is_ACLMMP_SRS(file_path):
     file = open(file_path, 'r')
-    header = file.read(16)
+    try:
+        header = file.read(16)
+    except UnicodeDecodeError:
+        file.close()
+        return False
     file.close()
     return header == SRS_FILE_HEADER
 
