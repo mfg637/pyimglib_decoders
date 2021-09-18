@@ -10,7 +10,8 @@ from . import jpeg,\
     YUV4MPEG2,\
     jpeg_xl,\
     frames_stream,\
-    video
+    video,\
+    srs
 
 
 def open_image(file_path, required_size=None):
@@ -27,6 +28,8 @@ def open_image(file_path, required_size=None):
         return jpeg_xl.decode(file_path)
     elif video.is_video(file_path):
         return video.open_video(file_path)
+    elif srs.is_ACLMMP_SRS(file_path):
+        return srs.decode(file_path)
     else:
         pil_image = None
         try:
